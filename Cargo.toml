@@ -1,0 +1,60 @@
+[package]
+name = "th"
+version = "1.5.0"
+edition = "2021"
+description = "Teleport Helper - CLI for managing Teleport logins"
+authors = ["YouLend Development Team"]
+
+[dependencies]
+# CLI framework
+clap = { version = "4.5", features = ["derive", "color", "suggestions"] }
+
+# Async runtime for process management
+tokio = { version = "1.0", features = ["full"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# JSON handling (for tsh JSON output)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration management
+toml = "0.8"
+config = "0.14"
+
+# Interactive UI and prompts
+dialoguer = { version = "0.11", features = ["completion"] }
+console = "0.15"
+indicatif = "0.17"
+
+# Terminal colors and styling
+colored = "2.0"
+crossterm = "0.27"
+
+# File system operations
+tempfile = "3.0"
+dirs = "5.0"
+
+# Shell integration
+which = "6.0"
+
+# HTTP client for opening URLs and GitHub API
+webbrowser = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+
+# Regex for pattern matching
+regex = "1.0"
+
+# String manipulation
+shellwords = "1.1"
+
+# Random number generation
+rand = "0.8"
+
+# Version comparison
+semver = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
