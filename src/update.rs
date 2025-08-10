@@ -3,13 +3,11 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 
-const GITHUB_API_URL: &str = "https://api.github.com/repos/YouLend/th-rust/releases/latest";
+const GITHUB_API_URL: &str = "https://github.com/nikomain/th-rust/releases";
 const UPDATE_CHECK_FILE: &str = ".th_update_check";
 const CHECK_INTERVAL_SECONDS: u64 = 24 * 60 * 60; // 24 hours
 
-// Test mode for simulating updates
-const TEST_MODE: bool = true; // Set to false for production
-const TEST_CHECK_INTERVAL_SECONDS: u64 = 5; // 5 seconds for testing
+// Production mode - real GitHub API calls
 
 #[derive(Debug, Deserialize)]
 struct GitHubRelease {
@@ -127,25 +125,7 @@ impl UpdateChecker {
         println!("📦 Found new version: {} → {}", current_version, latest_version);
         println!("📝 Release notes:\n{}\n", release.body);
         
-        if TEST_MODE {
-            println!("🧪 TEST MODE: Simulating update process...");
-            
-            // Find the appropriate binary asset
-            let asset = self.find_binary_asset(&release.assets)?;
-            
-            println!("⬇️  [SIMULATED] Downloading {}...", asset.name);
-            tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-            
-            println!("🔧 [SIMULATED] Installing update...");
-            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            
-            println!("✅ [SIMULATED] Successfully updated to version {}", latest_version);
-            println!("🔄 [SIMULATED] Restart your terminal or run `source th.sh` to use the new version");
-            println!("\n⚠️  NOTE: This was a test simulation. No actual update was performed.");
-            return Ok(());
-        }
-        
-        // Real update process for production
+        // Real update process
         let asset = self.find_binary_asset(&release.assets)?;
         
         println!("⬇️  Downloading {}...", asset.name);
@@ -172,8 +152,8 @@ impl UpdateChecker {
         let cache = self.load_cache().await.unwrap_or_default();
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         
-        // Use shorter interval for testing
-        let interval = if TEST_MODE { TEST_CHECK_INTERVAL_SECONDS } else { CHECK_INTERVAL_SECONDS };
+        // Use production interval
+        let interval = CHECK_INTERVAL_SECONDS;
         
         // Check if we need to update (cache expired)
         if now - cache.last_check < interval && cache.last_check > 0 {
@@ -207,30 +187,6 @@ impl UpdateChecker {
     }
 
     async fn fetch_latest_release(&self) -> Result<GitHubRelease> {
-        // In test mode, return a mock response with a newer version
-        if TEST_MODE {
-            return Ok(GitHubRelease {
-                tag_name: "v1.6.0".to_string(),
-                name: "Version 1.6.0 - Enhanced Features".to_string(),
-                body: "🚀 New Features:\n• Autoupdate functionality\n• Improved error handling\n• Better performance\n\n🐛 Bug Fixes:\n• Fixed credential sourcing issues\n• Improved connection stability".to_string(),
-                html_url: "https://github.com/YouLend/th-rust/releases/tag/v1.6.0".to_string(),
-                assets: vec![
-                    GitHubAsset {
-                        name: "th-aarch64-apple-darwin".to_string(),
-                        browser_download_url: "https://github.com/YouLend/th-rust/releases/download/v1.6.0/th-aarch64-apple-darwin".to_string(),
-                    },
-                    GitHubAsset {
-                        name: "th-x86_64-apple-darwin".to_string(),
-                        browser_download_url: "https://github.com/YouLend/th-rust/releases/download/v1.6.0/th-x86_64-apple-darwin".to_string(),
-                    },
-                    GitHubAsset {
-                        name: "th-x86_64-unknown-linux-gnu".to_string(),
-                        browser_download_url: "https://github.com/YouLend/th-rust/releases/download/v1.6.0/th-x86_64-unknown-linux-gnu".to_string(),
-                    },
-                ],
-            });
-        }
-        
         let client = reqwest::Client::builder()
             .user_agent("th-cli")
             .timeout(std::time::Duration::from_secs(10))
