@@ -12,8 +12,8 @@ NC='\033[0m' # No Color
 REPO="nikomain/th-rust"
 GITHUB_URL="https://github.com/${REPO}"
 
-# Installation directory
-INSTALL_DIR="/usr/local/bin"
+# Installation directory - use user-local directory to avoid sudo
+INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="th"
 
 echo -e "${BLUE}🚀 Installing Teleport Helper (th)...${NC}"
@@ -61,13 +61,14 @@ echo -e "${BLUE}📋 Detected platform: ${OS}-${ARCH}${NC}"
 echo -e "${BLUE}📦 Binary: ${BINARY_FILE}${NC}"
 echo
 
-# Check if we can write to install directory
-if [[ ! -w "$INSTALL_DIR" ]]; then
-    echo -e "${YELLOW}⚠️  Need sudo access to install to $INSTALL_DIR${NC}"
-    SUDO="sudo"
-else
-    SUDO=""
+# Create install directory if it doesn't exist
+if [[ ! -d "$INSTALL_DIR" ]]; then
+    echo -e "${BLUE}📁 Creating install directory: $INSTALL_DIR${NC}"
+    mkdir -p "$INSTALL_DIR"
 fi
+
+# No sudo needed for user directories
+SUDO=""
 
 # Get latest release info
 echo -e "${BLUE}🔍 Fetching latest release...${NC}"
@@ -112,7 +113,7 @@ rm -rf "$TEMP_DIR"
 WRAPPER_SCRIPT="${INSTALL_DIR}/th.sh"
 echo -e "${BLUE}📝 Creating wrapper script at ${WRAPPER_SCRIPT}...${NC}"
 
-$SUDO tee "$WRAPPER_SCRIPT" > /dev/null << 'EOF'
+tee "$WRAPPER_SCRIPT" > /dev/null << 'EOF'
 #!/bin/bash
 
 # Wrapper script for th - sources credentials after execution
@@ -139,7 +140,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 EOF
 
-$SUDO chmod +x "$WRAPPER_SCRIPT"
+chmod +x "$WRAPPER_SCRIPT"
 
 echo
 echo -e "${GREEN}✅ Installation completed successfully!${NC}"
@@ -153,16 +154,20 @@ echo -e "  ${YELLOW}th update${NC}          - Update to latest version"
 echo
 echo -e "${BLUE}🔧 Setup:${NC}"
 echo -e "Add to your shell profile (~/.zshrc or ~/.bash_profile):"
-echo -e "${YELLOW}source /usr/local/bin/th.sh${NC}"
+echo -e "${YELLOW}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
+echo -e "${YELLOW}source \$HOME/.local/bin/th.sh${NC}"
 echo
 echo -e "${BLUE}🚀 Quick start:${NC}"
-echo -e "${YELLOW}source /usr/local/bin/th.sh && th${NC}"
+echo -e "${YELLOW}export PATH=\"\$HOME/.local/bin:\$PATH\" && source \$HOME/.local/bin/th.sh && th${NC}"
 echo
+
+# Update PATH for current session
+export PATH="$INSTALL_DIR:$PATH"
 
 # Check if binary works
 if command -v th >/dev/null 2>&1; then
-    echo -e "${GREEN}🎉 th is now available in your PATH!${NC}"
+    echo -e "${GREEN}🎉 th is now available in your current session!${NC}"
 else
     echo -e "${YELLOW}⚠️  You may need to restart your terminal or run:${NC}"
-    echo -e "${YELLOW}   export PATH=\"${INSTALL_DIR}:\$PATH\"${NC}"
+    echo -e "${YELLOW}   export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
 fi

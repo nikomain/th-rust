@@ -74,7 +74,8 @@ th changelog           # View recent changes
 ### Shell Integration (macOS/Linux)
 Add to your `~/.zshrc` or `~/.bash_profile`:
 ```bash
-source /usr/local/bin/th.sh
+export PATH="$HOME/.local/bin:$PATH"
+source $HOME/.local/bin/th.sh
 ```
 
 ### Windows
