@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
 
-const GITHUB_API_URL: &str = "https://github.com/nikomain/th-rust/releases";
+const GITHUB_API_URL: &str = "https://api.github.com/repos/nikomain/th-rust/releases/latest";
 const UPDATE_CHECK_FILE: &str = ".th_update_check";
 const CHECK_INTERVAL_SECONDS: u64 = 24 * 60 * 60; // 24 hours
 
@@ -95,7 +95,8 @@ impl UpdateChecker {
     pub async fn fetch_changelog(&self) -> Result<String> {
         let release = self.fetch_latest_release().await?;
         let current_version = semver::Version::parse(&self.current_version)?;
-        let latest_version = semver::Version::parse(&release.tag_name.trim_start_matches('v'))?;
+        let latest_tag = release.tag_name.trim_start_matches('v').trim_start_matches('-');
+        let latest_version = semver::Version::parse(latest_tag)?;
         
         if latest_version > current_version {
             Ok(format!("## {} → {}\n\n{}", 
@@ -115,7 +116,8 @@ impl UpdateChecker {
         
         let release = self.fetch_latest_release().await?;
         let current_version = semver::Version::parse(&self.current_version)?;
-        let latest_version = semver::Version::parse(&release.tag_name.trim_start_matches('v'))?;
+        let latest_tag = release.tag_name.trim_start_matches('v').trim_start_matches('-');
+        let latest_version = semver::Version::parse(latest_tag)?;
         
         if latest_version <= current_version {
             println!("✅ You're already running the latest version ({})", self.current_version);
@@ -169,9 +171,10 @@ impl UpdateChecker {
             }
         };
         
-        // Compare versions
+        // Compare versions - handle both v1.5.1 and v-1.5.1 formats
         let current_version = semver::Version::parse(&self.current_version)?;
-        let latest_version = semver::Version::parse(&release.tag_name.trim_start_matches('v'))?;
+        let latest_tag = release.tag_name.trim_start_matches('v').trim_start_matches('-');
+        let latest_version = semver::Version::parse(latest_tag)?;
         let update_available = latest_version > current_version;
         
         // Update cache
@@ -228,31 +231,60 @@ impl UpdateChecker {
     }
 
     async fn install_binary(&self, binary_data: Vec<u8>) -> Result<()> {
-        // Get current binary path
         let current_exe = std::env::current_exe()?;
-        let backup_path = current_exe.with_extension("backup");
         
-        // Create backup of current binary
-        fs::copy(&current_exe, &backup_path).await?;
-        
-        // Write new binary to temporary file first
-        let temp_path = current_exe.with_extension("tmp");
-        fs::write(&temp_path, binary_data).await?;
-        
-        // Make it executable (Unix only)
-        #[cfg(unix)]
+        #[cfg(windows)]
         {
+            // Windows locks running executables, so we need a different approach
+            let temp_path = current_exe.with_extension("tmp");
+            let backup_path = current_exe.with_extension("backup");
+            
+            // Write new binary to temp file
+            fs::write(&temp_path, binary_data).await?;
+            
+            // On Windows, try to replace the current binary
+            // If it fails (likely due to file lock), rename current to backup and temp to current
+            if fs::rename(&current_exe, &backup_path).await.is_ok() {
+                if fs::rename(&temp_path, &current_exe).await.is_err() {
+                    // Restore backup if rename failed
+                    let _ = fs::rename(&backup_path, &current_exe).await;
+                    return Err(anyhow::anyhow!("Failed to replace binary on Windows"));
+                }
+                // Remove backup on success
+                let _ = fs::remove_file(&backup_path).await;
+            } else {
+                // If we can't rename the current exe (it's locked), instruct user to restart
+                println!("⚠️  Windows detected: Binary is locked by the system");
+                println!("🔄 The update has been downloaded to: {}", temp_path.display());
+                println!("📝 Please restart your terminal and run 'th' to complete the update");
+                return Ok(());
+            }
+        }
+        
+        #[cfg(not(windows))]
+        {
+            // Unix/macOS approach
+            let backup_path = current_exe.with_extension("backup");
+            
+            // Create backup of current binary
+            fs::copy(&current_exe, &backup_path).await?;
+            
+            // Write new binary to temporary file first
+            let temp_path = current_exe.with_extension("tmp");
+            fs::write(&temp_path, binary_data).await?;
+            
+            // Make it executable
             use std::os::unix::fs::PermissionsExt;
             let mut perms = fs::metadata(&temp_path).await?.permissions();
             perms.set_mode(0o755);
             fs::set_permissions(&temp_path, perms).await?;
+            
+            // Atomic replace (rename is atomic on most filesystems)
+            fs::rename(&temp_path, &current_exe).await?;
+            
+            // Remove backup on success
+            let _ = fs::remove_file(&backup_path).await;
         }
-        
-        // Atomic replace (rename is atomic on most filesystems)
-        fs::rename(&temp_path, &current_exe).await?;
-        
-        // Remove backup on success
-        let _ = fs::remove_file(&backup_path).await;
         
         Ok(())
     }
